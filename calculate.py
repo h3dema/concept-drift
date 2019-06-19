@@ -18,8 +18,7 @@ def calculate_drift(X, y,
                     w=100,
                     lambda_=50,
                     clfs_label=["GaussianNB", "Page-Hinkley", "AdWin"],
-                    print_drifts=False,
-                    plot_circles=["AdWin"]):
+                    ):
     result = dict()
     result['clfs'] = dict(zip(tuple(clfs_label), np.zeros(len(clfs_label))))
     result['y'] = y
@@ -48,7 +47,6 @@ def calculate_drift(X, y,
 
 
 def plot_drift(data,
-               n_train,
                print_drifts=False,
                plot_circles=["AdWin"]):
 

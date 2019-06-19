@@ -1,13 +1,16 @@
 #!/usr/bin/env python
-# -*- coding: utf-8 -*- 
+# -*- coding: utf-8 -*-
 import os
 import glob
 import pandas as pd
+import sys
+import re
 
 
 UTILS = "../utils/"
 if UTILS not in sys.path:
     sys.path.append("../utils/")
+
 
 from util import ql_ref_date
 from util import recover_download_site_mab
@@ -16,7 +19,7 @@ from util import get_onlysite
 
 def get_values(temp, dir_ctrl):
     dir_ctrl = os.path.join(temp, dir_ctrl)
-    print("Reading",dir_ctrl)
+    print("Reading", dir_ctrl)
     files = glob.glob(os.path.join(dir_ctrl, '*.log'))
     sarss = []
     sars = None
@@ -51,14 +54,14 @@ def get_values(temp, dir_ctrl):
                     sars = None
                 elif '] rewards:' in _l:
                     sars['r'] = _l.split('] rewards:')[1].replace('\n', '').strip()
-                    if 'None' in sars['r'] :
+                    if 'None' in sars['r']:
                         sars = None  # error, skip
                     else:
                         try:
-                            ## find new state
+                            # find new state
                             for j in range(1, 10):
                                 _ll = lines[i + j]
-                                if 'Frequency: ' in _ll:                                  
+                                if 'Frequency: ' in _ll:
                                     f = re.findall(r"[-+]?\d*\.\d+|\d+", _ll)
                                     if len(f) == 10:
                                         # ok
@@ -70,21 +73,28 @@ def get_values(temp, dir_ctrl):
     return sarss
 
 
-def get_dataframe(TEMP='temp', MAB_DIR='MAB1'):
-    # create a temporary dir
-    if not os.path.exists(TEMP):
-        os.mkdir(TEMP)
-    # extract MAB results to TEMP
-    files = glob.glob(os.path.join('..', MAB1_DIR, '/data/*.tar.xz'))
-    for f in files:
-        print("Extracting {}".format(os.path.basename(f)))
-        s = "tar -C {} -xJf {}".format(TEMP, f)
-        # print(s)
-        os.system(s)
-        
+def get_dataframe(TEMP='temp', MAB_DIR='MAB1', extract_files=True):
+    if extract_files:
+        # create a temporary dir
+        if not os.path.exists(TEMP):
+            os.mkdir(TEMP)
+        # extract MAB results to TEMP
+        files = glob.glob('../{}/data/*.tar.xz'.format(MAB_DIR))
+        for f in files:
+            print("Extracting {}".format(os.path.basename(f)))
+            s = "tar -C {} -xJf {}".format(TEMP, f)
+            # print(s)
+            os.system(s)
+
     sarss = get_values(TEMP, 'ctrl')
     print("Found", len(sarss))
-    os.system("rm -fr {}".format(TEMP))
-    
+    if extract_files:
+        os.system("rm -fr {}".format(TEMP))
+
     data = pd.DataFrame(sarss)
+    data['r'] = data['r'].astype('float')
     return data
+
+
+if __name__ == "__main__":
+    get_dataframe()
