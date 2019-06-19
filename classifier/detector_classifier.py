@@ -13,6 +13,8 @@ class DetectorClassifier(BaseEstimator):
         self.detection_method = detection_method
         self.classes = classes
         self.change_detected = 0
+        self.elems = 0
+        self.detected_elements = []
 
     def fit(self, X, y):
         self.clf.fit(X, y)
@@ -24,8 +26,11 @@ class DetectorClassifier(BaseEstimator):
             self.change_detected += 1
             self.clf = clone(self.clf)
             self.clf.partial_fit(X, y, classes=self.classes)
+            # register the concept drift element
+            self.detected_elements .append(self.elems)
         else:
             self.clf.partial_fit(X, y)
+        self.elems += 1
 
     def predict(self, X):
         return self.clf.predict(X)
