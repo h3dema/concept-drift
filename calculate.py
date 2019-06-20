@@ -36,12 +36,15 @@ def calculate_drift(X, y,
 
         estimator = (y[n_train:] == y_pre) * 1
         acc_run = np.convolve(estimator, np.ones((w,)) / w, 'same')
-        result['clfs'][clfs_label[i]] = {'mean': np.mean(acc_run), 'w': w}
+        result['clfs'][clfs_label[i]] = {'mean': np.mean(acc_run),
+                                         'w': w,
+                                         'points': acc_run}
 
         if clfs[i].__class__.__name__ == "DetectorClassifier":
             acc = [acc_run[d] for d in clfs[i].detected_elements]
-            points = [(x, y) for x, y in zip(clfs[i].detected_elements, acc)]
-            result['clfs'][clfs_label[i]].update({'num': clfs[i].change_detected, 'points': points})
+            detected_points = [(x, y_) for x, y_ in zip(clfs[i].detected_elements, acc)]
+            result['clfs'][clfs_label[i]].update({'num': clfs[i].change_detected,
+                                                  'detected_points': detected_points})
 
     return result
 
@@ -77,13 +80,13 @@ def plot_drift(data,
         if clfs_label in ["Page-Hinkley", "AdWin"]:
             n = data['clfs'][clfs_label]['num']
             print("Drift detection: {}".format(n))
+            detected_points = data['clfs'][clfs_label].get('detected_points', [])
 
-            points = data['clfs'][clfs_label].get('points', [])
             if print_drifts and n > 0:
-                print("Drift detected in", str(points))
+                print("Drift detected in", str(detected_points))
 
             if has_to_plot and clfs_label in plot_circles:
-                for x, y, in points:
+                for x, y, in detected_points:
                     # c = plt.Circle((x, y), 0.1, color='r')
                     c = Ellipse(xy=(x, y), width=ellipse_x, height=ellipse_y, angle=0,
                                 color=ellipse_color[clfs_label],
@@ -92,7 +95,7 @@ def plot_drift(data,
                                 )
                     ax.add_artist(c)
 
-        acc_run = [y for x, y in data]
+        acc_run = data['clfs'][clfs_label].get('points', [])
         plt.plot(acc_run, "-", label=clfs_label, color=ellipse_color[clfs_label])
 
     plt.legend(loc='best')
