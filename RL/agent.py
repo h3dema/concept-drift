@@ -22,15 +22,31 @@ import sys
 import argparse
 import logging
 import pandas as pd
-from scipy.special import softmax
+import numpy as np
+import pickle
 
-from RL.mab import UCBAbstract
+from mab import UCBAbstract
 
 
 #
 # set log
 #
 LOG = logging.getLogger('AGENT')
+
+
+def softmax(x):
+    _softmax = np.exp(x) / sum(np.exp(x))
+    return _softmax
+
+
+def code_action(c, p, num_channels=11):
+    return int(p * (num_channels - 1) + c)
+
+
+def decode_action(v, num_channels=11):
+    c = v % num_channels
+    p = v // num_channels
+    return c, p
 
 
 #
@@ -58,19 +74,35 @@ class MABAgent(UCBAbstract):
         return p[action]
 
 
-def code_action(c, p, num_channels=13):
-    return p * num_channels + c
+def get_concept_drift(data, main_dir='..'):
+    if main_dir not in sys.path:
+        sys.path.append(main_dir)
+    from calculate import calculate_drift
+
+    y = data['r']
+    y = np.sign(np.concatenate(([1], y[1:].values - y[:-1].values)))
+    y[y == -1] = 0
+    X = data[['Active time', 'Medium busy', 'channel',
+              'new Active time', 'new Busy time', 'new Medium busy',
+              'new_channel', 'new_txpower', 'txpower']].values
+    result = calculate_drift(X, y, n_train=1800, w=16, clfs_label=["AdWin"])
+    detected_points = result['clfs']["AdWin"].get('detected_points', [])
+    if len(detected_points) > 0:
+        detected_points = [x for x, _ in detected_points]  # we only need the x (iteration number)
+    LOG.info("Detected {} drift points: {}".format(len(detected_points), detected_points))
+    return detected_points
 
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description='Run the RL agent')
     # arg "n-actions" considers 15 power setups
-    parser.add_argument('--n-actions', type=int, default=15, help='Inform the number of actions the RL agent can perform')
-    parser.add_argument('--double-trick', type=bool, default=True, help='Perform the double trick in the timestep')
+    parser.add_argument('--n-actions', type=int, default=165, help='Inform the number of actions the RL agent can perform')
+    parser.add_argument('--double-trick', type=bool, default=False, help='Perform the double trick in the timestep')
     parser.add_argument('--T', type=int, default=2, help='initial value for double trick')
     parser.add_argument('--debug', action="store_true", help='log debug info')
 
     parser.add_argument('--data', type=str, default='../sarss.h5', help='data to simulate')
+    parser.add_argument('--iteractions', type=str, default='iteractions.p', help='results from simulation')
 
     args = parser.parse_args()
 
@@ -89,10 +121,17 @@ if __name__ == "__main__":
     data_all = pd.read_hdf(args.data, key='sarss')
     # process only traffic from both stations going to google
     data = data_all[data_all['sites'] == ('google', 'google')]
+    columns_to_convert = ['new_channel', 'new_txpower', 'r']
+    # generates warning >> SettingWithCopyWarning
+    data.loc[:, columns_to_convert] = data.loc[:, columns_to_convert].astype('float')
+
+    drifts = get_concept_drift(data)  # get drift points from data
 
     t = 1
     T = args.T
-    for __d in data:
+    __iterations = []
+    for __iter in range(data.shape[0]):
+        __d = data.iloc[__iter, :]
         """
             a) get data from real execution, including the action performed --ea
             b) get action proposed by the algorithm -- a
@@ -105,15 +144,16 @@ if __name__ == "__main__":
         a = agent.get_action()
         Pa = agent.prob_action(a) * 100
 
-        ea = code_action(__d['new_channel'], __d['new_txpower'])  # code the action using channel and power
+        new_channel = float(__d['new_channel'])
+        new_txpower = float(__d['new_txpower'])
+        ea = code_action(new_channel, new_txpower)  # code the action using channel and power
         Pea = agent.prob_action(ea) * 100
 
         r = __d['r']  # reward received
+        drift = __iter in drifts
+        LOG.info('t: {} ch{} pwr {} Action: {}[P={}] Selected Action: {}[P={}] Reward: {} Drift {}'.format(t, new_channel, new_txpower, ea, Pea, a, Pa, r, drift))
 
-        drift = False
-
-        LOG.info('t: {} Action: {}[{}] Selected Action: {}[{}] Reward: {} Drift {}'.format(t, ea, Pea, a, Pa, r, drift))
-
+        __iterations.append([__iter, t, new_channel, new_txpower, ea, Pea, a, Pa, r, drift])
         # don't need to run_action
         # r, success = agent.run_action(a)
         agent.update(ea, r)  # update using the executed action in order to learn
@@ -126,3 +166,6 @@ if __name__ == "__main__":
                 T = 2 * T
             except OverflowError:
                 T = args.T
+
+# save data
+pickle.dump(__iterations, open(args.iteractions, 'wb'), protocol=pickle.HIGHEST_PROTOCOL)

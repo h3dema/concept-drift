@@ -111,7 +111,8 @@ class UCBAbstract(MAB):
 
     @property
     def w(self):
-        __w = self.avg + self._C * np.sqrt(self._b * np.log(self._total_pulls) / self.n_visited)
+        # __w = self.avg + self._C * np.sqrt(self._b * np.log(self._total_pulls) / (self.n_visited))
+        __w = self.avg + self._C * np.sqrt(self._b * np.log(self._total_pulls + 1) / (self.n_visited + 1))
         return __w
 
     def get_action(self):
