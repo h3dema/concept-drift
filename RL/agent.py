@@ -85,7 +85,7 @@ def get_concept_drift(data, main_dir='..'):
     X = data[['Active time', 'Medium busy', 'channel',
               'new Active time', 'new Busy time', 'new Medium busy',
               'new_channel', 'new_txpower', 'txpower']].values
-    result = calculate_drift(X, y, n_train=1800, w=16, clfs_label=["AdWin"])
+    result = calculate_drift(X, y, n_train=100, w=16, clfs_label=["AdWin"])
     detected_points = result['clfs']["AdWin"].get('detected_points', [])
     if len(detected_points) > 0:
         detected_points = [x for x, _ in detected_points]  # we only need the x (iteration number)
@@ -97,7 +97,7 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description='Run the RL agent')
     # arg "n-actions" considers 15 power setups
     parser.add_argument('--n-actions', type=int, default=165, help='Inform the number of actions the RL agent can perform')
-    parser.add_argument('--double-trick', type=bool, default=False, help='Perform the double trick in the timestep')
+    parser.add_argument('--double-trick', type=bool, default=True, help='Perform the double trick in the timestep')
     parser.add_argument('--T', type=int, default=2, help='initial value for double trick')
     parser.add_argument('--debug', action="store_true", help='log debug info')
 
@@ -141,17 +141,18 @@ if __name__ == "__main__":
             f) update system using pa, so the system learns the real environment
 
         """
-        a = agent.get_action()
-        Pa = agent.prob_action(a) * 100
-
         new_channel = float(__d['new_channel'])
         new_txpower = float(__d['new_txpower'])
-        ea = code_action(new_channel, new_txpower)  # code the action using channel and power
+
+        a = agent.get_action()  # best action using the current knowledge
+        ea = code_action(new_channel, new_txpower)  # action performed
+
+        Pa = agent.prob_action(a) * 100
         Pea = agent.prob_action(ea) * 100
 
         r = __d['r']  # reward received
         drift = __iter in drifts
-        LOG.info('t: {} ch{} pwr {} Action: {}[P={}] Selected Action: {}[P={}] Reward: {} Drift {}'.format(t, new_channel, new_txpower, ea, Pea, a, Pa, r, drift))
+        LOG.info('t: {} ch{} pwr {} Estimated action: {}[P={}] Actual action: {}[P={}] Reward: {} Drift {}'.format(t, new_channel, new_txpower, ea, Pea, a, Pa, r, drift))
 
         __iterations.append([__iter, t, new_channel, new_txpower, ea, Pea, a, Pa, r, drift])
         # don't need to run_action
@@ -167,5 +168,5 @@ if __name__ == "__main__":
             except OverflowError:
                 T = args.T
 
-# save data
-pickle.dump(__iterations, open(args.iteractions, 'wb'), protocol=pickle.HIGHEST_PROTOCOL)
+    # save data
+    pickle.dump(__iterations, open(args.iteractions, 'wb'), protocol=pickle.HIGHEST_PROTOCOL)
