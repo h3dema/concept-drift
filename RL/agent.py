@@ -74,7 +74,7 @@ class MABAgent(UCBAbstract):
         return p[action]
 
 
-def get_concept_drift(data, main_dir='..'):
+def get_concept_drift(data, n_train=150, window=16, main_dir='..'):
     if main_dir not in sys.path:
         sys.path.append(main_dir)
     from calculate import calculate_drift
@@ -85,7 +85,7 @@ def get_concept_drift(data, main_dir='..'):
     X = data[['Active time', 'Medium busy', 'channel',
               'new Active time', 'new Busy time', 'new Medium busy',
               'new_channel', 'new_txpower', 'txpower']].values
-    result = calculate_drift(X, y, n_train=100, w=16, clfs_label=["AdWin"])
+    result = calculate_drift(X, y, n_train=n_train, w=window, clfs_label=["AdWin"])
     detected_points = result['clfs']["AdWin"].get('detected_points', [])
     if len(detected_points) > 0:
         detected_points = [x for x, _ in detected_points]  # we only need the x (iteration number)
