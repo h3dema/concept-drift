@@ -13,6 +13,8 @@ from concept_drift.page_hinkley import PageHinkley
 from evaluation.prequential import prequential
 
 
+plt.rcParams['figure.figsize'] = (12.0, 6.0)
+
 def calculate_drift(X, y,
                     n_train=1000,
                     w=100,
